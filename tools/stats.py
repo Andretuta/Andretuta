@@ -1,14 +1,34 @@
-"""Card de contribuições em pixel art, no estilo do banner. Gera assets/stats.svg.
+"""Card de contribuições em pixel art, no estilo do banner. Gera assets/stats.svg e assets/fame.svg.
 
 Uso: GH_TOKEN=... python tools/stats.py [usuario]   (ou --from arquivo.json com a resposta da GraphQL)
 Sem dependências: só a biblioteca padrão.
 """
-import json, os, sys, urllib.request
+import json, os, re, sys, urllib.request
 
-USER = next((a for a in sys.argv[1:] if not a.startswith('--') and not a.endswith('.json')), 'Andretuta')
+def parse_user(argv):
+    skip = False
+    for a in argv:
+        if skip:
+            skip = False
+            continue
+        if a in ('--from', '--stars', '--fame'):
+            skip = True
+            continue
+        if not a.startswith('--') and not a.endswith('.json'):
+            return a
+    return 'Andretuta'
+
+USER = parse_user(sys.argv[1:])
 OUT = os.path.join(os.path.dirname(__file__), '..', 'assets', 'stats.svg')
 QUERY = ('query($u:String!){user(login:$u){contributionsCollection{totalCommitContributions '
          'totalPullRequestContributions contributionCalendar{totalContributions weeks{contributionDays{contributionCount}}}}}}')
+
+def gh_get(url):
+    h = {'User-Agent': 'stats-card'}
+    if os.environ.get('GH_TOKEN'):
+        h['Authorization'] = 'bearer ' + os.environ['GH_TOKEN']
+    req = urllib.request.Request(url, headers=h)
+    return json.load(urllib.request.urlopen(req, timeout=30))
 
 def fetch():
     if '--from' in sys.argv:
@@ -16,7 +36,10 @@ def fetch():
     req = urllib.request.Request('https://api.github.com/graphql', method='POST',
                                  data=json.dumps({'query': QUERY, 'variables': {'u': USER}}).encode(),
                                  headers={'Authorization': 'bearer ' + os.environ['GH_TOKEN'], 'User-Agent': 'stats-card'})
-    return json.load(urllib.request.urlopen(req, timeout=30))
+    res = json.load(urllib.request.urlopen(req, timeout=30))
+    if 'errors' in res or not (res.get('data') or {}).get('user'):
+        raise RuntimeError(f"GraphQL error for {USER}: {res.get('errors') or res}")
+    return res
 
 c = fetch()['data']['user']['contributionsCollection']
 cal = c['contributionCalendar']
@@ -25,17 +48,19 @@ stats = [(cal['totalContributions'], 'CONTRIBUIÇÕES', '#fbbbad'),
          (c['totalCommitContributions'], 'COMMITS', '#ee8695'),
          (c['totalPullRequestContributions'], 'PULL REQUESTS', '#9ff0e0')]
 
-# fonte pixel 3x5 (M e N mais largos); linhas negativas/extras são acentos
+# fonte pixel 3x5 (M e W e N mais largos); linhas negativas/extras são acentos
 F = {
     '0': '111 101 101 101 111', '1': '010 110 010 010 111', '2': '111 001 111 100 111', '3': '111 001 011 001 111',
     '4': '101 101 111 001 001', '5': '111 100 111 001 111', '6': '111 100 111 101 111', '7': '111 001 010 010 010',
     '8': '111 101 111 101 111', '9': '111 101 111 001 111', '.': '0 0 0 0 1', ' ': '00 00 00 00 00',
-    'A': '010 101 111 101 101', 'B': '110 101 110 101 110', 'C': '011 100 100 100 011', 'E': '111 100 110 100 111',
-    'I': '111 010 010 010 111', 'L': '100 100 100 100 111', 'M': '10001 11011 10101 10001 10001',
-    'N': '1001 1101 1011 1001 1001', 'O': '010 101 101 101 010', 'P': '110 101 110 100 100', 'Q': '010 101 101 110 011',
-    'R': '110 101 110 101 101', 'S': '011 100 010 001 110', 'T': '111 010 010 010 010', 'U': '101 101 101 101 111',
-    'F': '111 100 110 100 100', 'H': '101 101 111 101 101', 'Y': '101 101 010 010 010', 'G': '011 100 101 101 011',
-    '/': '001 001 010 100 100', '_': '000 000 000 000 111', '>': '100 110 111 110 100',
+    'A': '010 101 111 101 101', 'B': '110 101 110 101 110', 'C': '011 100 100 100 011', 'D': '110 101 101 101 110',
+    'E': '111 100 110 100 111', 'F': '111 100 110 100 100', 'G': '011 100 101 101 011', 'H': '101 101 111 101 101',
+    'I': '111 010 010 010 111', 'J': '001 001 001 101 010', 'K': '101 101 110 101 101', 'L': '100 100 100 100 111',
+    'M': '10001 11011 10101 10001 10001', 'N': '1001 1101 1011 1001 1001', 'O': '010 101 101 101 010',
+    'P': '110 101 110 100 100', 'Q': '010 101 101 110 011', 'R': '110 101 110 101 101', 'S': '011 100 010 001 110',
+    'T': '111 010 010 010 010', 'U': '101 101 101 101 111', 'V': '101 101 101 101 010', 'W': '10001 10001 10101 11011 10001',
+    'X': '101 101 010 101 101', 'Y': '101 101 010 010 010', 'Z': '111 001 010 100 111',
+    '/': '001 001 010 100 100', '_': '000 000 000 000 111', '-': '000 000 111 000 000', '>': '100 110 111 110 100',
 }
 TIL = [(0, -1), (1, -2), (2, -1)]
 ACC = {'Ç': ('C', [(1, 5)]), 'Õ': ('O', TIL), 'Ã': ('A', TIL), 'Ú': ('U', [(1, -1), (2, -2)])}
@@ -100,19 +125,43 @@ open(OUT, 'w', encoding='utf-8').write('\n'.join(o))
 print('stats.svg:', num(stats[0][0]), 'contribuições,', stats[1][0], 'commits,', stats[2][0], 'PRs; pico semanal', peak)
 
 # ---------- cartão "contribuição mais famosa" (assets/fame.svg) ----------
-FAME_REPO = 'HayatoG/iss_pc'
+DEFAULT_FAME_REPO = 'ItsNotRexed/Leonida'
 
-def stars():
+def find_fame_repo():
+    if '--fame' in sys.argv:
+        return sys.argv[sys.argv.index('--fame') + 1], None
+    if '--from' in sys.argv:
+        return DEFAULT_FAME_REPO, None
+    try:
+        items = gh_get(f'https://api.github.com/search/issues?q=author:{USER}+type:pr+is:merged&per_page=100').get('items', [])
+        repos = sorted({
+            i['repository_url'].split('/repos/')[-1]
+            for i in items
+            if '/repos/' in i.get('repository_url', '')
+            and i['repository_url'].split('/repos/')[-1].split('/')[0].lower() != USER.lower()
+        })
+        best_repo, best_stars = None, -1
+        for r in repos:
+            info = gh_get(f'https://api.github.com/repos/{r}')
+            s = info.get('stargazers_count', 0)
+            if not info.get('private') and s > best_stars:
+                best_repo, best_stars = info['full_name'], s
+        if best_repo:
+            return best_repo, best_stars
+    except Exception:
+        pass
+    return DEFAULT_FAME_REPO, None
+
+def stars(repo, cached=None):
     if '--stars' in sys.argv:
         return int(sys.argv[sys.argv.index('--stars') + 1])
-    h = {'User-Agent': 'stats-card'}
-    if os.environ.get('GH_TOKEN'):
-        h['Authorization'] = 'bearer ' + os.environ['GH_TOKEN']
-    req = urllib.request.Request(f'https://api.github.com/repos/{FAME_REPO}', headers=h)
-    return json.load(urllib.request.urlopen(req, timeout=30))['stargazers_count']
+    if cached is not None:
+        return cached
+    return gh_get(f'https://api.github.com/repos/{repo}')['stargazers_count']
 
 STAR = ['0001000', '0001000', '1111111', '0111110', '0011100', '0110110', '0100010']
-n_stars = stars()
+FAME_REPO, cached_stars = find_fame_repo()
+n_stars = stars(FAME_REPO, cached_stars)
 FW, FH = 200, 30
 f = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {FW} {FH}" width="1000" height="{FH * 5}" shape-rendering="crispEdges" role="img" '
      f'aria-label="Contribuição mais famosa: {FAME_REPO}, {num(n_stars)} estrelas">',
@@ -121,17 +170,30 @@ f = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {FW} {FH}" width="10
      f'<rect width="1" height="{FH}" fill="#2a2d3a"/><rect x="{FW - 1}" width="1" height="{FH}" fill="#2a2d3a"/>']
 f += text('CONTRIBUIÇÃO MAIS FAMOSA', 8, 6, '#8f8aa8')[0]
 f.append(f'<rect x="8" y="13" width="{FW - 16}" height="1" fill="#2a2d3a"/>')
-cursor = text('>', 8, 17, '#ee8695', scale=2)[0]  # cursor de menu de jogo, piscando
-f.append('<g>' + ''.join(cursor) + '<animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" calcMode="discrete"/></g>')
-f += text(FAME_REPO.upper(), 18, 17, '#fbbbad', scale=2)[0]
 num_w = text(num(n_stars), 0, 0, '#ffe58f', scale=2)[1]
 nx = FW - 8 - num_w
-f += text(num(n_stars), nx, 17, '#ffe58f', scale=2)[0]
 sx = nx - 11
+cursor = text('>', 8, 17, '#ee8695', scale=2)[0]  # cursor de menu de jogo, piscando
+f.append('<g>' + ''.join(cursor) + '<animate attributeName="opacity" values="1;0;1" dur="1s" repeatCount="indefinite" calcMode="discrete"/></g>')
+repo_label = FAME_REPO.upper()
+_, w2 = text(repo_label, 0, 0, '#fbbbad', scale=2)
+fits = 18 + w2 <= sx - 4
+f += text(repo_label, 18, 17 if fits else 19, '#fbbbad', scale=2 if fits else 1)[0]
+f += text(num(n_stars), nx, 17, '#ffe58f', scale=2)[0]
 for j, row in enumerate(STAR):
     for i, b in enumerate(row):
         if b == '1':
             f.append(f'<rect x="{sx + i}" y="{18 + j}" width="1" height="1" fill="{"#ffe58f" if j < 4 else "#fab47e"}"/>')
 f.append('</svg>')
 open(os.path.join(os.path.dirname(OUT), 'fame.svg'), 'w', encoding='utf-8').write('\n'.join(f))
+readme_path = os.path.join(os.path.dirname(__file__), '..', 'README.md')
+if os.path.exists(readme_path):
+    readme_txt = open(readme_path, encoding='utf-8').read()
+    updated = re.sub(
+        r'<a href="https://github\.com/[^"]+"><img src="assets/fame\.svg" alt="Contribuição mais famosa: [^"]+"',
+        f'<a href="https://github.com/{FAME_REPO}"><img src="assets/fame.svg" alt="Contribuição mais famosa: {FAME_REPO}"',
+        readme_txt,
+    )
+    if updated != readme_txt:
+        open(readme_path, 'w', encoding='utf-8').write(updated)
 print('fame.svg:', FAME_REPO, num(n_stars), 'estrelas')

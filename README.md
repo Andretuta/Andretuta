@@ -25,5 +25,5 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/HayatoG/iss_pc"><img src="assets/fame.svg" alt="Contribuição mais famosa: HayatoG/iss_pc" width="100%"></a>
+  <a href="https://github.com/ItsNotRexed/Leonida"><img src="assets/fame.svg" alt="Contribuição mais famosa: ItsNotRexed/Leonida" width="100%"></a>
 </p>
