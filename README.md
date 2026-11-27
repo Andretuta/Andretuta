@@ -25,5 +25,5 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ubiquitarianism/leonida"><img src="assets/fame.svg" alt="Contribuição mais famosa: ubiquitarianism/leonida" width="100%"></a>
+  <a href="https://github.com/ProjectLeonida/mandy"><img src="assets/fame.svg" alt="Contribuição mais famosa: ProjectLeonida/mandy" width="100%"></a>
 </p>
